@@ -108,4 +108,4 @@ A: 可以。修改 yaml 文件中的 `action` 部分，将 `service: notify.push
 
 ## 📄 License
 
-MIT License
+GNU General Public License v3.0
