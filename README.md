@@ -5,7 +5,8 @@
 
 ## ✨ 主要功能
 
-* **🔄 自动暂停**：通过 Ping 检测指定设备状态，离线 5 分钟后自动调用暂停接口。
+* **🔄 自动暂停**：监控设备在线状态，离线 5 分钟后自动调用暂停接口。
+* **📡 双模检测**：支持 **Ping (ICMP)** 和 **Nmap (ARP)** 两种检测方式，完美适配雷神加速盒等禁 Ping 设备。
 * **🔁 智能重试**：如果暂停请求失败（网络波动或 API 错误），系统会自动重试 5 次（间隔 30 秒）。
 * **🛡️ Token 保活与监控**：每小时自动刷新账号状态，保持 Token 活跃。
 * **🚨 状态报警**：
@@ -63,16 +64,27 @@ homeassistant:
 leishen_api_payload: '{"account_token": "YOUR_TOKEN", "lang": "zh_CN"}'
 ```
 
-### 第四步：添加设备 Ping 传感器
+### 第四步：添加设备检测 (二选一)
 
-由于 Home Assistant 2023.12+ 版本的变动，Ping 传感器需要在 UI 中配置。
+根据你的设备类型，选择一种检测方式。
 
-1.  进入 HA **配置** -> **设备与服务** -> **添加集成**。
-2.  搜索 **Ping (ICMP)**。
-3.  输入你的电脑/主机 IP 地址。
-4.  添加完成后，找到该实体，点击设置，将其**实体 ID (Entity ID)** 重命名为：
-    * `binary_sensor.leishen_box`
-    * *(如果你想用别的名字，请记得同步修改 leishen_control.yaml 中的 trigger 部分)*
+#### 方式 A：Ping 检测 (推荐大多数电脑/主机)
+如果你的设备可以被 Ping 通：
+1.  进入 HA **配置** -> **设备与服务** -> **添加集成** -> 搜索 **Ping (ICMP)**。
+2.  输入设备 IP。
+3.  添加后，将实体重命名为 `binary_sensor.leishen_box`。
+4.  **YAML 配置**：保持 `leishen_control.yaml` 默认即可。
+
+#### 方式 B：Nmap 检测 (推荐雷神盒子/禁Ping设备)
+如果设备 Ping 不通 (如雷神盒子)，使用 ARP 协议检测：
+1.  进入 HA **配置** -> **设备与服务** -> **添加集成** -> 搜索 **Nmap Tracker**。
+2.  配置扫描 IP 为设备 IP (例如 192.168.1.100)。
+3.  勾选 "Home Assistant 负责追踪设备"。
+4.  添加后，系统会生成一个 `device_tracker` 实体 (例如 `device_tracker.192_168_1_100`)。建议将其重命名为 `device_tracker.leishen_box`。
+5.  **YAML 配置 (必须修改)**：
+    打开 `packages/leishen_control.yaml`，找到 `trigger` 部分：
+    * 注释掉 **方式一 (Ping)** 的代码。
+    * 启用 **方式二 (Nmap)** 的代码 (删除前面的 `#`)。
 
 ### 第五步：确认通知服务名称
 
@@ -100,12 +112,15 @@ leishen_api_payload: '{"account_token": "YOUR_TOKEN", "lang": "zh_CN"}'
 **Q: Token 会过期吗？**
 A: 本项目包含每小时一次的 API 请求（Sensor），通常可以起到保活作用。如果 Token 意外失效，系统会通过 Pushover 发送高优先级报警提醒你更新。
 
-**Q: 如何修改离线等待时间？**
-A: 修改 `leishen_control.yaml` 中 `trigger` 部分的 `for: "00:05:00"` 即可。
+**Q: 为什么设备关机了还没暂停？**
+A: 请检查 HA 中的设备状态。
+* 如果是 Ping 方式，`binary_sensor` 应该变 `off`。
+* 如果是 Nmap 方式，`device_tracker` 应该变 `not_home`。
+* 确认配置中的 `for: "00:05:00"` 延时是否已过。
 
 **Q: 我不想用 Pushover，用微信/Telegram 可以吗？**
 A: 可以。修改 yaml 文件中的 `action` 部分，将 `service: notify.pushover` 替换为你使用的通知服务（如 `notify.wechat`），并调整 `data` 下的内容格式即可。
 
 ## 📄 License
 
-GNU General Public License v3.0
+MIT License
