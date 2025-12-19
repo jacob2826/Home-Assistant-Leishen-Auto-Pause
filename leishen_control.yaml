@@ -47,12 +47,31 @@ automation:
     id: 'leishen_auto_pause_logic'
     mode: restart
     trigger:
+      # =======================================================
+      # 方式一：使用 Ping (ICMP) 检测 [默认推荐]
+      # 适用于：电脑、主机等能被 Ping 通的设备
+      # 实体类型：binary_sensor
+      # 状态变化：on (在线) -> off (离线)
+      # =======================================================
       - platform: state
-        # 确保你已经在 HA 界面中创建了这个 Ping 传感器
         entity_id: binary_sensor.leishen_box
         from: "on"
         to: "off"
         for: "00:05:00"
+
+      # =======================================================
+      # 方式二：使用 Nmap (ARP) 或 路由器集成检测 [雷神盒子推荐]
+      # 适用于：Ping 不通的设备 (防火墙阻挡) 或基于 ARP 的检测
+      # 实体类型：device_tracker
+      # 状态变化：home (在家) -> not_home (离家)
+      # 使用方法：删除下方注释符号 # 启用，并注释掉上方的方式一
+      # =======================================================
+      # - platform: state
+      #   entity_id: device_tracker.leishen_box
+      #   from: "home"
+      #   to: "not_home"
+      #   for: "00:05:00"
+
     action:
       - repeat:
           count: 5
