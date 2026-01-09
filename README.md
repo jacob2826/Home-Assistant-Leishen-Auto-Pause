@@ -1,126 +1,117 @@
-# Home Assistant Leishen Auto-Pause
-# 雷神加速器自动暂停集成 (HA Package)
+# Home Assistant Leishen Auto Pause (ARP Edition)
 
-这是一个用于 Home Assistant 的 Package 配置，旨在实现当你的游戏 PC/主机离线（关机）时，自动暂停雷神加速器时长，防止时长浪费。
+这是一个 Home Assistant 的自动化配置方案，用于实现 **雷神加速器盒子（或 PC）** 的自动暂停功能。
 
-## ✨ 主要功能
+相比于传统的 Ping 或 Nmap 扫描方案，本项目采用了 **ARP（物理层）检测机制**。
 
-* **🔄 自动暂停**：监控设备在线状态，离线 5 分钟后自动调用暂停接口。
-* **📡 双模检测**：支持 **Ping (ICMP)** 和 **Nmap (ARP)** 两种检测方式，完美适配雷神加速盒等禁 Ping 设备。
-* **🔁 智能重试**：如果暂停请求失败（网络波动或 API 错误），系统会自动重试 5 次（间隔 30 秒）。
-* **🛡️ Token 保活与监控**：每小时自动刷新账号状态，保持 Token 活跃。
-* **🚨 状态报警**：
-    * **暂停成功**：发送普通通知。
-    * **暂停失败**：重试 5 次后仍失败，发送**高优先级**报警。
-    * **Token 失效**：检测到 API 返回 Token 错误时，发送**高优先级**报警。
-* **📱 Pushover 集成**：原生支持 Pushover 消息推送。
+这完美解决了部分加速器盒子为了安全而设置的 **“禁 Ping” 和 “关闭所有 TCP 端口”** 导致 Home Assistant 无法判断设备在线状态的问题。
 
-## 🛠️ 准备工作
+---
 
-在开始之前，请确保你拥有：
+## ✨ 特性
 
-1.  **Home Assistant** (已安装并运行)。
-2.  **雷神加速器账号 Token** (`account_token`)。
-3.  **Pushover 账号** (用于接收通知，可选，也可自行修改为其他通知服务)。
-4.  **目标设备的固定 IP 地址** (建议在路由器设置静态 IP)。
+- 🚀 **极速响应**：设备关机 / 拔线后，约 **1 分钟内** 即可自动触发暂停（传统 Nmap 方案通常需要 5–10 分钟）。
+- 🛡️ **穿透防火墙**：利用 Linux 底层 `ip neigh` 命令读取 ARP 表，无需设备回应 Ping，只要设备物理连接了网线即可被检测。
+- 🤖 **自动重试**：网络波动导致 API 请求失败会自动重试 5 次。
+- 📩 **状态通知**：集成通知推送（可配置），暂停成功或 Token 失效时及时提醒。
+- 🔒 **隐私安全**：使用 `secrets.yaml` 存储 Token，敏感信息不直接暴露在代码中。
 
-### 🔍 如何获取 Token (详细步骤)
+---
 
-1.  在 PC 浏览器中访问 [雷神加速器官网](https://vip.leigod.com/user.html) 并登录。
-2.  按下 `F12` 键打开浏览器的开发者工具。
-3.  切换到 **Network (网络)** 标签页。
-4.  在网页上进行任意操作（例如点击“暂停”或“恢复”按钮），此时 Network 面板会出现新的请求。
-5.  在 Network 面板的过滤器/搜索框中输入 `pause` 或 `info`，找到指向 `webapi.leigod.com` 的请求（通常是 `pause` 或 `info` 接口）。
-6.  点击该请求，切换到 **Payload (载荷)** 或 **Form Data** 标签页。
-7.  找到 `account_token` 字段，复制其后的长字符串（这就是你的 Token）。
+## ⚙️ 前置要求
 
-## 🚀 安装配置指南
+- 已安装 **Home Assistant**（推荐运行在 Linux / Docker 环境，因为需要使用 `ip neigh` 命令）。
+- 拥有 **雷神加速器账号**。
+- 知道你的 **雷神加速器设备的内网 IP 地址**。
 
-### 第一步：启用 Packages 功能
+---
 
-检查你的 `configuration.yaml` 文件，确保启用了 `packages` 功能：
+## 🚀 安装与配置
 
-```yaml
-homeassistant:
-  packages: !include_dir_named packages
+### 第一步：获取 API Payload
+
+1. 在浏览器中登录雷神加速器官网。
+2. 按 **F12** 打开开发者工具，点击 **“暂停时长”** 按钮。
+3. 在 **Network（网络）** 标签页中找到 `pause` 请求。
+4. 复制 **Request Payload（JSON 格式）**，它看起来像这样：
+
+```json
+{"account_token":"你的Token","lang":"zh_CN"}
 ```
 
-如果之前没有 `packages` 文件夹，请在 `configuration.yaml` 同级目录下新建一个名为 `packages` 的文件夹。
+---
 
-### 第二步：导入配置文件
+### 第二步：配置 `secrets.yaml`
 
-下载本项目中的 `leishen_control.yaml` 文件，将其放入你的 `packages/` 文件夹中。
-
-### 第三步：配置 Secrets (关键)
-
-为了保护隐私，我们不直接将 Token 写在代码里。请打开你的 `secrets.yaml` 文件，添加以下内容：
-
-**⚠️ 注意：格式非常重要！外层必须是单引号 `'`，内部 JSON 属性必须是双引号 `"`。**
+在你的 Home Assistant `secrets.yaml` 文件中添加以下内容：
 
 ```yaml
-# secrets.yaml
-
-# 雷神 API 请求体 (替换 YOUR_TOKEN 为你的真实 Token)
-leishen_api_payload: '{"account_token": "YOUR_TOKEN", "lang": "zh_CN"}'
+# 注意：这里需要填入完整的 JSON 字符串
+leishen_api_payload: '{"account_token":"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx","lang":"zh_CN"}'
 ```
 
-### 第四步：添加设备检测 (二选一)
+---
 
-根据你的设备类型，选择一种检测方式。
+### 第三步：部署 Package 文件
 
-#### 方式 A：Ping 检测 (推荐大多数电脑/主机)
-如果你的设备可以被 Ping 通：
-1.  进入 HA **配置** -> **设备与服务** -> **添加集成** -> 搜索 **Ping (ICMP)**。
-2.  输入设备 IP。
-3.  添加后，将实体重命名为 `binary_sensor.leishen_box`。
-4.  **YAML 配置**：保持 `leishen_control.yaml` 默认即可。
+- 下载本项目中的 `leishen_control.yaml` 文件。
+- 将其放入 Home Assistant 配置目录下的 `packages` 文件夹中（如果你启用了 Packages 功能）。
 
-#### 方式 B：Nmap 检测 (推荐雷神盒子/禁Ping设备)
-如果设备 Ping 不通 (如雷神盒子)，使用 ARP 协议检测：
-1.  进入 HA **配置** -> **设备与服务** -> **添加集成** -> 搜索 **Nmap Tracker**。
-2.  配置扫描 IP 为设备 IP (例如 192.168.1.100)。
-3.  勾选 "Home Assistant 负责追踪设备"。
-4.  添加后，系统会生成一个 `device_tracker` 实体 (例如 `device_tracker.192_168_1_100`)。建议将其重命名为 `device_tracker.leishen_box`。
-5.  **YAML 配置 (必须修改)**：
-    打开 `packages/leishen_control.yaml`，找到 `trigger` 部分：
-    * 注释掉 **方式一 (Ping)** 的代码。
-    * 启用 **方式二 (Nmap)** 的代码 (删除前面的 `#`)。
+或者：
 
-### 第五步：确认通知服务名称
+- 直接将代码内容复制到你的 `configuration.yaml` 及 `automations.yaml` 中对应的位置。
 
-本项目默认使用 `notify.pushover` 服务。请前往 HA **开发者工具** -> **服务**，检查你的 Pushover 服务名称是否一致。
+---
 
-* 如果你的服务名是 `notify.my_iphone` 或其他，请在 `leishen_control.yaml` 中全局搜索并替换 `notify.pushover`。
+### 第四步：修改配置（重要！）
 
-### 第六步：重启生效
+打开 `leishen_control.yaml`，找到以下两处进行修改：
 
-重启 Home Assistant。
+#### 1️⃣ 修改 IP 地址
 
-## ✅ 验证是否成功
+搜索 `command_line` 部分，将 `192.168.x.x` 替换为你设备的真实 IP（注意：一行命令里有两处需要替换）：
 
-1.  **检查 Sensor**：
-    * 在开发者工具中查看 `sensor.leishen_account_info`。
-    * 状态应为 `0` (正常) 或 `400803` (已暂停)。
-    * 如果状态是 `400xxx`，说明 Token 填错了。
+```bash
+command: "ping -c 1 -W 1 192.168.1.100 > /dev/null 2>&1; ip neigh show 192.168.1.100 | grep -q 'lladdr' && echo on || echo off"
+```
 
-2.  **测试自动化**：
-    * 手动在开发者工具中调用 `automation.trigger`，触发 `automation.leishen_auto_pause_logic`。
-    * 如果你收到了 Pushover 推送，说明配置成功！
+#### 2️⃣ 修改通知服务
 
-## 📝 常见问题
+搜索 `notify.pushover`，将其替换为你正在使用的通知服务实体，例如：
 
-**Q: Token 会过期吗？**
-A: 本项目包含每小时一次的 API 请求（Sensor），通常可以起到保活作用。如果 Token 意外失效，系统会通过 Pushover 发送高优先级报警提醒你更新。
+- `notify.mobile_app_iphone`
+- `notify.wechat`
 
-**Q: 为什么设备关机了还没暂停？**
-A: 请检查 HA 中的设备状态。
-* 如果是 Ping 方式，`binary_sensor` 应该变 `off`。
-* 如果是 Nmap 方式，`device_tracker` 应该变 `not_home`。
-* 确认配置中的 `for: "00:05:00"` 延时是否已过。
+---
 
-**Q: 我不想用 Pushover，用微信/Telegram 可以吗？**
-A: 可以。修改 yaml 文件中的 `action` 部分，将 `service: notify.pushover` 替换为你使用的通知服务（如 `notify.wechat`），并调整 `data` 下的内容格式即可。
+### 第五步：重启 Home Assistant
 
-## 📄 License
+配置修改完成后，**完全重启 Home Assistant** 以加载 Command Line 实体。
 
-GNU General Public License v3.0
+---
+
+## 🛠️ 原理说明
+
+### 为什么使用 ARP 检测？
+
+- 传统的 Ping 检测依赖 **ICMP 协议**，而很多硬件加速器盒子防火墙级别很高，会直接丢弃 ICMP 包，导致 HA 认为设备一直离线。
+- 使用 Nmap 扫描端口虽然可行，但 **速度慢且资源消耗大**。
+
+本项目利用以下组合命令：
+
+```bash
+ping -c 1 -W 1 IP ... ; ip neigh show IP | grep -q 'lladdr'
+```
+
+执行逻辑：
+
+1. 先发送一个 Ping 包（不管对方回不回应）。
+2. 该操作会强制 Linux 内核更新 ARP 缓存表。
+3. 通过 `ip neigh` 查看底层 ARP 表：
+   - 如果存在 MAC 地址（`lladdr`），说明设备 **物理连接正常**，判定为在线。
+
+---
+
+## 🤝 贡献
+
+欢迎提交 **Issue** 或 **Pull Request** 来改进代码。
